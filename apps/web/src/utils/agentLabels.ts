@@ -6,7 +6,6 @@ const AGENT_LABELS: Record<string, string> = {
   devin: 'Devin',
   gemini: 'Gemini',
   opencode: 'OpenCode',
-  amr: 'AMR',
   'cursor-agent': 'Cursor',
   cursor: 'Cursor',
   qwen: 'Qwen',

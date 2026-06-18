@@ -3370,27 +3370,18 @@ export interface DeriveConfigureGlobalsInput {
   // Whether a BYOK key/url has been saved (web client only — daemon
   // can leave this undefined).
   byokConfigured?: boolean;
-  // Whether the user has completed AMR (vela) sign-in. AMR ships with the
-  // app, so authorization — not installation — is its "configured" signal.
-  amrAuthorized?: boolean;
 }
 
 export function deriveConfigureGlobals(
   input: DeriveConfigureGlobalsInput,
 ): AnalyticsConfigureGlobals {
   const agents = input.agents ?? [];
-  // The AMR runtime is bundled with the app, so its agent row must not
-  // count as a user-configured local CLI: with it included every install
-  // reports 'local_cli' and the 'amr'/'none' buckets can never appear.
-  // AMR's configured signal is `amrAuthorized` (sign-in), not detection.
-  const cliAgents = agents.filter((a) => a.id !== 'amr');
-  const hasAvailableCli = cliAgents.some((a) => a.available === true);
+  const hasAvailableCli = agents.some((a) => a.available === true);
   const selectedAgent = input.agentId
     ? agents.find((a) => a.id === input.agentId)
     : undefined;
   const selectedAgentAvailable = selectedAgent?.available === true;
   const byokConfigured = input.byokConfigured === true;
-  const amrAuthorized = input.amrAuthorized === true;
 
   // 'api' mode means BYOK is the active execution path, so treat it as a
   // configured BYOK signal even when the caller cannot see the saved key
@@ -3405,8 +3396,6 @@ export function deriveConfigureGlobals(
     configureType = 'local_cli';
   } else if (byokSignal) {
     configureType = 'byok';
-  } else if (amrAuthorized) {
-    configureType = 'amr';
   } else {
     configureType = 'none';
   }
@@ -3418,7 +3407,7 @@ export function deriveConfigureGlobals(
       : 'unavailable';
   } else if (input.mode === 'api') {
     configureAvailability = byokConfigured ? 'available' : 'unavailable';
-  } else if (hasAvailableCli || byokConfigured || amrAuthorized) {
+  } else if (hasAvailableCli || byokConfigured) {
     configureAvailability = 'available';
   } else {
     configureAvailability = 'unknown';
@@ -3432,10 +3421,10 @@ export function deriveConfigureGlobals(
     // AnalyticsConfigureGlobals). `cli_runnable` mirrors
     // `has_available_configure_cli`; `byok_runnable` uses the actually-saved
     // key signal (not the `mode === 'api'` fallback, which can be true with no
-    // key yet); `amr_runnable` is sign-in.
+    // key yet); `amr_runnable` is always false (AMR removed from this fork).
     cli_runnable: hasAvailableCli,
     byok_runnable: byokConfigured,
-    amr_runnable: amrAuthorized,
+    amr_runnable: false,
   };
 }
 

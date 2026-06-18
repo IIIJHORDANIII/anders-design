@@ -14,7 +14,6 @@ import type { RegisterMemoryRoutesDeps } from './routes/memory.js';
 import type { RegisterProjectArtifactRoutesDeps, RegisterProjectFileRoutesDeps, RegisterProjectRoutesDeps, RegisterProjectUploadRoutesDeps } from './project-routes.js';
 import type { RegisterRoutineRoutesDeps } from './routes/routine.js';
 import type { RegisterStaticResourceRoutesDeps } from './routes/static-resource.js';
-import type { RegisterVelaRoutesDeps } from './routes/vela.js';
 import type { RegisterXaiRoutesDeps } from './routes/xai.js';
 
 type AllRegisteredRouteDeps =
@@ -39,7 +38,6 @@ type AllRegisteredRouteDeps =
   & RegisterProjectUploadRoutesDeps
   & RegisterRoutineRoutesDeps
   & RegisterStaticResourceRoutesDeps
-  & RegisterVelaRoutesDeps
   & RegisterXaiRoutesDeps;
 
 type Assert<T extends true> = T;

@@ -10,8 +10,8 @@
  *                 non-zero (tail appended to the error message).
  */
 import type { AgentEvent, ChatCommentAttachment, ChatMessage } from '../types';
-import type { AmrEntryAttribution } from '../analytics/amr-attribution';
 import type {
+  AmrModelsResponse,
   ChatAnalyticsHints,
   ChatRunCreateResponse,
   ChatRunListResponse,
@@ -22,7 +22,6 @@ import type {
   ChatSseEvent,
   ChatSseStartPayload,
   DaemonAgentPayload,
-  AmrModelsResponse,
   MediaExecutionPolicy,
   ResearchOptions,
   RunContextSelection,
@@ -351,16 +350,12 @@ function shouldSuppressLifecycleExitFallback(
   stderrTail: string,
 ): boolean {
   if (exitCode !== 130 || exitSignal) return false;
-  if (agentId === 'amr') return true;
   const normalizedStderr = stderrTail.toLowerCase();
   return (
     normalizedStderr.includes('opencode server listening') ||
     normalizedStderr.includes('opencode_server_password')
   );
 }
-
-const AMR_OPENCODE_INCOMPLETE_MESSAGE =
-  'AMR/OpenCode started, but the run did not complete. Please retry or check the run details for the session stream error.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -444,10 +439,10 @@ function formatOpenCodeSessionError(value: unknown): string | null {
     return message;
   }
   if (statusCode === 404) {
-    return 'The model service returned 404 Not Found for the configured runtime endpoint. Check the AMR Link URL or model route.';
+    return 'The model service returned 404 Not Found for the configured runtime endpoint.';
   }
   if (statusCode === 401 || statusCode === 403) {
-    return 'AMR authentication failed. Please sign in again or refresh the runtime key.';
+    return 'Authentication failed. Please sign in again.';
   }
   if (statusCode === 429) {
     return 'The model service rejected the request due to quota or rate limits. Retry later or check quota and rate limits.';
@@ -528,33 +523,6 @@ function formatLegacyOpenCodeSessionError(text: string): string | null {
     kind: 'opencode_session_error',
     ...details,
   });
-}
-
-function isAmrOpenCodeExitFallback(agentId: string | undefined, stderr: string): boolean {
-  if (agentId === 'amr' || agentId === 'opencode') return true;
-  const normalized = stderr.toLowerCase();
-  return normalized.includes('opencode server listening') || normalized.includes('opencode session error:');
-}
-
-function isAmrOpenCodeBootstrapLine(line: string): boolean {
-  const trimmed = line.trim();
-  return (
-    /^AMR run id:\s*\S+/i.test(trimmed) ||
-    /^Performing one time database migration/i.test(trimmed) ||
-    /^sqlite-migration:done$/i.test(trimmed) ||
-    /^Database migration complete\.?$/i.test(trimmed) ||
-    /^Warning:\s*OPENCODE_SERVER_PASSWORD is not set/i.test(trimmed) ||
-    /^opencode server listening on http:\/\/127\.0\.0\.1:\d+/i.test(trimmed)
-  );
-}
-
-function cleanAmrOpenCodeStderrFallback(agentId: string | undefined, stderr: string): string {
-  if (!isAmrOpenCodeExitFallback(agentId, stderr)) return stderr.trim();
-  return stderr
-    .split(/\r?\n/)
-    .filter((line) => line.trim() && !isAmrOpenCodeBootstrapLine(line))
-    .join('\n')
-    .trim();
 }
 
 export async function streamViaDaemon({
@@ -755,30 +723,8 @@ export interface VelaLoginStatus {
   browserOpenFailed?: boolean;
 }
 
-// AMR (vela) login surfaces three thin endpoints on the daemon:
-//   GET  /api/integrations/vela/status   — read ~/.amr/config.json projection
-//   POST /api/integrations/vela/login    — spawn `vela login` (vela opens browser itself)
-//   POST /api/integrations/vela/login/cancel — terminate a still-pending login
-//   POST /api/integrations/vela/logout   — clear ~/.amr auth and Settings-backed AMR auth env
-// The Settings UI polls /status after kicking off /login to detect completion.
-export async function fetchVelaLoginStatus(): Promise<VelaLoginStatus | null> {
-  try {
-    const resp = await fetch('/api/integrations/vela/status');
-    if (!resp.ok) return null;
-    return (await resp.json()) as VelaLoginStatus;
-  } catch {
-    return null;
-  }
-}
-
 export async function fetchAmrModels(): Promise<AmrModelsResponse | null> {
-  try {
-    const resp = await fetch('/api/amr/models', { cache: 'no-store' });
-    if (!resp.ok) return null;
-    return (await resp.json()) as AmrModelsResponse;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export interface StartVelaLoginResult {
@@ -789,52 +735,24 @@ export interface StartVelaLoginResult {
   error?: string;
 }
 
+// Vela/AMR removed from this fork — stubs kept for compilation.
+export async function fetchVelaLoginStatus(): Promise<VelaLoginStatus | null> {
+  return null;
+}
+
 export async function startVelaLogin(
-  attribution?: AmrEntryAttribution | null,
-  odDeviceId?: string | null,
+  _attribution?: unknown,
+  _odDeviceId?: string | null,
 ): Promise<StartVelaLoginResult> {
-  try {
-    const loginAttribution =
-      attribution && odDeviceId ? { ...attribution, odDeviceId } : attribution;
-    const resp = await fetch('/api/integrations/vela/login', {
-      method: 'POST',
-      headers: loginAttribution ? { 'Content-Type': 'application/json' } : undefined,
-      body: loginAttribution ? JSON.stringify({ attribution: loginAttribution }) : undefined,
-    });
-    if (resp.ok) {
-      const body = (await resp.json()) as { pid?: number };
-      return { ok: true, status: resp.status, pid: body.pid };
-    }
-    const body = (await resp.json().catch(() => null)) as { error?: string } | null;
-    return {
-      ok: false,
-      status: resp.status,
-      alreadyRunning: resp.status === 409,
-      error: body?.error ?? '',
-    };
-  } catch (err) {
-    return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) };
-  }
+  return { ok: false, status: 0, error: 'AMR removed' };
 }
 
 export async function cancelVelaLogin(): Promise<{ ok: boolean; canceled?: boolean }> {
-  try {
-    const resp = await fetch('/api/integrations/vela/login/cancel', { method: 'POST' });
-    if (!resp.ok) return { ok: false };
-    const body = (await resp.json().catch(() => null)) as { canceled?: boolean } | null;
-    return { ok: true, canceled: body?.canceled };
-  } catch {
-    return { ok: false };
-  }
+  return { ok: false };
 }
 
 export async function velaLogout(): Promise<{ ok: boolean }> {
-  try {
-    const resp = await fetch('/api/integrations/vela/logout', { method: 'POST' });
-    return { ok: resp.ok };
-  } catch {
-    return { ok: false };
-  }
+  return { ok: false };
 }
 
 // Forwards the user's assistant-turn rating to the daemon so it can emit
@@ -1132,14 +1050,11 @@ async function consumeDaemonRun({
         handlers.onDone(acc);
         return;
       }
-      const cleanedStderr = cleanAmrOpenCodeStderrFallback(agentId, stderrBuf);
-      const formattedOpenCodeError = formatLegacyOpenCodeSessionError(cleanedStderr);
-      const tail = (formattedOpenCodeError ?? cleanedStderr).trim().slice(-400);
-      const fallbackTail =
-        tail || (isAmrOpenCodeExitFallback(agentId, stderrBuf) ? AMR_OPENCODE_INCOMPLETE_MESSAGE : '');
+      const formattedOpenCodeError = formatLegacyOpenCodeSessionError(stderrBuf);
+      const tail = (formattedOpenCodeError ?? stderrBuf).trim().slice(-400);
       handlers.onError(
         markErrorResumable(
-          new Error(`agent exited with ${exitSignal ? `signal ${exitSignal}` : `code ${exitCode}`}${fallbackTail ? `\n${fallbackTail}` : ''}`),
+          new Error(`agent exited with ${exitSignal ? `signal ${exitSignal}` : `code ${exitCode}`}${tail ? `\n${tail}` : ''}`),
           endResumable,
         ),
       );

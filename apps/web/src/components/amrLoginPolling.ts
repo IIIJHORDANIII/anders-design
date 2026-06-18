@@ -1,52 +1,16 @@
-import type { VelaLoginStatus } from '../providers/daemon';
+// AMR removed — stubs for compilation.
+export const AMR_LOGIN_STATUS_EVENT = 'amr:login-status-change';
+export const AMR_LOGIN_POLL_INTERVAL_MS = 1_000;
+export const AMR_LOGIN_STARTUP_SETTLE_MS = 500;
 
-export const AMR_LOGIN_POLL_INTERVAL_MS = 2000;
-export const AMR_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-export const AMR_LOGIN_STARTUP_SETTLE_MS = 3000;
-export const AMR_LOGIN_STATUS_EVENT = 'od:amr-login-status-change';
-
-export type AmrLoginPollOutcome = 'pending' | 'signed-in' | 'stopped' | 'timed-out';
-export type AmrLoginStatusEventReason =
-  | 'login-started'
-  | 'login-canceled'
-  | 'status-changed';
-
-export function amrLoginPollOutcome(
-  status: VelaLoginStatus | null,
-  startedAt: number,
-  now: number = Date.now(),
-): AmrLoginPollOutcome {
-  if (status?.loggedIn) return 'signed-in';
-  if (
-    status?.loginInFlight === false &&
-    now - startedAt >= AMR_LOGIN_STARTUP_SETTLE_MS
-  ) {
-    return 'stopped';
-  }
-  if (now - startedAt >= AMR_LOGIN_TIMEOUT_MS) return 'timed-out';
-  return 'pending';
+// Used as a function: amrLoginPollOutcome(status, startedAt) → string
+export function amrLoginPollOutcome(..._args: unknown[]): 'signed-in' | 'stopped' | 'timed-out' | undefined {
+  return undefined;
 }
 
-export function notifyAmrLoginStatusChanged(
-  reason: AmrLoginStatusEventReason = 'status-changed',
-) {
-  window.dispatchEvent(
-    new CustomEvent(AMR_LOGIN_STATUS_EVENT, { detail: { reason } }),
-  );
+// Used as a function: amrLoginStatusEventReason(event) → string
+export function amrLoginStatusEventReason(..._args: unknown[]): string | undefined {
+  return undefined;
 }
 
-export function amrLoginStatusEventReason(
-  event: Event,
-): AmrLoginStatusEventReason {
-  if (event instanceof CustomEvent) {
-    const reason = (event.detail as { reason?: unknown } | null)?.reason;
-    if (
-      reason === 'login-started' ||
-      reason === 'login-canceled' ||
-      reason === 'status-changed'
-    ) {
-      return reason;
-    }
-  }
-  return 'status-changed';
-}
+export function notifyAmrLoginStatusChanged(..._args: unknown[]): void {}

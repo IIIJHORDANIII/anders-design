@@ -73,8 +73,6 @@ import {
   type ProviderTestRequest,
 } from '@open-design/contracts/api/connectionTest';
 import { googleGenerateContentUrl } from './google-models.js';
-import { resolveAmrProfile } from './integrations/vela.js';
-
 export { validateBaseUrl } from '@open-design/contracts/api/connectionTest';
 
 // DNS-aware companion to `validateBaseUrl`. The contracts-side check only
@@ -1703,7 +1701,6 @@ function attachAgentStreamHandlers(
   cwd: string,
   model: string | undefined,
   modelEnv: Record<string, string | undefined>,
-  liveModelScope: string | null,
   send: (event: string, payload: unknown) => void,
   appendRawStdout?: (chunk: string) => void,
 ): AgentSpawnHandle {
@@ -1738,13 +1735,7 @@ function attachAgentStreamHandlers(
       child,
       prompt,
       cwd,
-      // Same substitution as the chat-run path in server.ts — adapters whose
-      // CLI rejects the synthetic 'default' (e.g. AMR / vela, which forces
-      // session/set_model before session/prompt) need the def's first
-      // concrete fallback id here too, otherwise Test connection deadlocks
-      // on the same `session/set_model must be called before session/prompt`
-      // error the chat-run path already handles.
-      model: resolveModelForAgent(def as never, model ?? null, modelEnv, liveModelScope),
+      model: resolveModelForAgent(def as never, model ?? null, modelEnv, null),
       mcpServers: [],
       send,
     });
@@ -2064,7 +2055,6 @@ async function testAgentConnectionInternal(
       undefined,
       { resolvedBin: executableResolution.selectedPath },
     );
-    const liveModelScope = input.agentId === 'amr' ? resolveAmrProfile(baseEnv) : null;
     const mmdRouteLaunchEnv = input.agentId === 'claude'
       ? await loadMmdRouteLaunchEnv(
           {
@@ -2138,7 +2128,6 @@ async function testAgentConnectionInternal(
       tempDir,
       input.model,
       env,
-      liveModelScope,
       sink.send,
       sink.appendRawStdout,
     );

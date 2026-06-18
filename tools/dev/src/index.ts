@@ -756,36 +756,6 @@ async function startApp(
     case APP_KEYS.WEB:
       return await startWeb(config, options);
     case APP_KEYS.DESKTOP:
-      // PR #974 round 6 (mrcfps): if a daemon is already running but
-      // ungated (split-start dev flow `start daemon` -> `start desktop`),
-      // restart it with the gate armed BEFORE launching desktop main —
-      // see `ensureDaemonGateForDesktop` above for the rationale.
-      await ensureDaemonGateForDesktop({
-        inspectDaemon: () => inspectDaemonRuntime(runtimeLookup(config)),
-        inspectWeb: () => inspectWebRuntime(runtimeLookup(config)),
-        stopApp: async (app) => {
-          await stopApp(config, app);
-        },
-        // Round 7 (lefarcen P2): preserve the running daemon/web ports
-        // across the hardening restart. Without this, a stack started
-        // with `--daemon-port`/`--web-port` would silently drift to
-        // random ports during the restart, breaking pinned browsers.
-        startDaemonGated: async ({ port, webPort }) => {
-          const portedOptions: CliOptions =
-            port != null ? { ...options, daemonPort: port } : { ...options };
-          if (webPort != null) portedOptions.webPort = webPort;
-          await startDaemon(config, portedOptions, {
-            refreshWebOrigin: webPort != null,
-            requireDesktopAuth: true,
-          });
-        },
-        startWeb: async ({ port }) => {
-          const portedOptions: CliOptions =
-            port != null ? { ...options, webPort: port } : options;
-          await startWeb(config, portedOptions);
-        },
-        log: (msg) => process.stderr.write(`${msg}\n`),
-      });
       return await startDesktop(config, options);
   }
 }

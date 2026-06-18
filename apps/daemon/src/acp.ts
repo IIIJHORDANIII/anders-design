@@ -88,7 +88,6 @@ interface AttachAcpSessionOptions {
   clientName?: string;
   clientVersion?: string;
   stageTimeoutMs?: number;
-  modelUnavailableErrorCode?: 'AMR_MODEL_UNAVAILABLE';
 }
 
 function errorMessage(err: unknown): string {
@@ -791,7 +790,6 @@ export function attachAcpSession({
   clientName = 'open-design',
   clientVersion = 'runtime-adapter',
   stageTimeoutMs = DEFAULT_STAGE_TIMEOUT_MS,
-  modelUnavailableErrorCode,
 }: AttachAcpSessionOptions) {
   const runStartedAt = Date.now();
   const effectiveCwd = path.resolve(cwd || process.cwd());
@@ -842,26 +840,6 @@ export function attachAcpSession({
     stageTimer = null;
   };
 
-  const amrModelUnavailablePayload = (message: string) => ({
-    message,
-    error: {
-      code: 'AMR_MODEL_UNAVAILABLE',
-      message,
-      retryable: false,
-      details: { kind: 'amr_model', action: 'choose_model' },
-    },
-  });
-
-  const isModelUnavailableError = (message: string) => {
-    const value = message.toLowerCase();
-    return (
-      value.includes('model not found') ||
-      value.includes('providermodelnotfounderror') ||
-      value.includes('unknown model') ||
-      value.includes('invalid model')
-    );
-  };
-
   const failWithPayload = (payload: unknown) => {
     if (finished) return;
     finished = true;
@@ -873,30 +851,25 @@ export function attachAcpSession({
 
   const fail = (
     message: string,
-    options: { forceModelUnavailable?: boolean; details?: unknown; retryable?: boolean } = {},
+    options: { details?: unknown; retryable?: boolean } = {},
   ) => {
     if (finished) return;
     finished = true;
     fatal = true;
     clearStageTimer();
-    const useModelUnavailable =
-      modelUnavailableErrorCode &&
-      (options.forceModelUnavailable || isModelUnavailableError(message));
     send(
       'error',
-      useModelUnavailable
-        ? amrModelUnavailablePayload(message)
-        : options.details === undefined && options.retryable === undefined
-          ? { message }
-          : {
+      options.details === undefined && options.retryable === undefined
+        ? { message }
+        : {
+            message,
+            error: {
+              code: 'AGENT_EXECUTION_FAILED',
               message,
-              error: {
-                code: 'AGENT_EXECUTION_FAILED',
-                message,
-                retryable: options.retryable ?? false,
-                ...(options.details === undefined ? {} : { details: options.details }),
-              },
+              retryable: options.retryable ?? false,
+              ...(options.details === undefined ? {} : { details: options.details }),
             },
+          },
     );
     if (!child.killed) child.kill('SIGTERM');
   };
@@ -1193,13 +1166,6 @@ export function attachAcpSession({
       return;
     }
     if (promptRequestId !== null && obj.id === promptRequestId) {
-      if (!emittedTextChunk && !emittedToolCall && modelUnavailableErrorCode) {
-        fail(
-          'ACP session completed without producing any assistant text. Refresh the AMR model list, choose a supported model, and retry this run.',
-          { forceModelUnavailable: true },
-        );
-        return;
-      }
       finishCleanPrompt(result.usage);
       return;
     }

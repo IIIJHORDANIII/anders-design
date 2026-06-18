@@ -10,7 +10,6 @@ import { spawnEnvForAgent } from './env.js';
 import { probeAgentAuthStatus } from './auth.js';
 import { agentCapabilities } from './capabilities.js';
 import { installMetaForAgent } from './metadata.js';
-import { resolveAmrProfile } from '../integrations/vela.js';
 import {
   buildAuthDiagnostic,
   buildExecutableDiagnostic,
@@ -30,21 +29,6 @@ type FetchedRuntimeModels = {
   models: RuntimeModelOption[];
   source: RuntimeModelSource;
 };
-
-function amrModelScopeFromEnv(env: NodeJS.ProcessEnv): string {
-  return resolveAmrProfile(env);
-}
-
-function withRememberedAmrModels(
-  def: RuntimeAgentDef,
-  env: NodeJS.ProcessEnv,
-  modelResult: FetchedRuntimeModels,
-): FetchedRuntimeModels {
-  if (def.id !== 'amr' || modelResult.models.length > 0) return modelResult;
-  const rememberedModels = getRememberedLiveModels(def.id, amrModelScopeFromEnv(env));
-  if (rememberedModels.length === 0) return modelResult;
-  return { models: rememberedModels, source: 'live' };
-}
 
 async function fetchModels(
   def: RuntimeAgentDef,
@@ -233,15 +217,14 @@ async function probe(
     fetchModels(def, launch.launchPath, probeEnv),
     probeAgentAuthStatus(def, launch.launchPath, probeEnv),
   ]);
-  const surfacedModelResult = withRememberedAmrModels(def, probeEnv, modelResult);
   if (caps) {
     agentCapabilities.set(def.id, caps);
   }
   const authDiagnostic = auth ? buildAuthDiagnostic(def, auth) : null;
   return {
     ...stripFns(def),
-    models: surfacedModelResult.models,
-    modelsSource: surfacedModelResult.source,
+    models: modelResult.models,
+    modelsSource: modelResult.source,
     available: true,
     path: launch.selectedPath,
     version: outcome.version,
@@ -305,19 +288,11 @@ async function safeProbe(
 }
 
 function rememberDetectedLiveModels(
-  def: RuntimeAgentDef,
-  configuredEnv: Record<string, string>,
+  _def: RuntimeAgentDef,
+  _configuredEnv: Record<string, string>,
   agent: DetectedAgent,
 ): void {
-  if (def.id === 'amr' && agent.models.length === 0) return;
-  const scope = def.id === 'amr'
-    ? amrModelScopeFromEnv({
-        ...process.env,
-        ...(def.env || {}),
-        ...configuredEnv,
-      })
-    : null;
-  rememberLiveModels(agent.id, agent.models, scope);
+  rememberLiveModels(agent.id, agent.models, null);
 }
 
 export async function detectAgents(

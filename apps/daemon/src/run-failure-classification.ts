@@ -5,7 +5,6 @@ import type {
   TrackingRunFailureUserAction,
 } from '@open-design/contracts/analytics';
 
-import { classifyAmrAccountFailure } from './integrations/vela-errors.js';
 import { classifyAgentServiceFailure } from './runtimes/auth.js';
 import type { RunResult, RunStatusForAnalytics } from './run-result.js';
 
@@ -167,7 +166,7 @@ function isPromptTooLargeText(text: string): boolean {
 }
 
 function isUpstreamDetailText(text: string): boolean {
-  return /\b(stream disconnected before completion|response\.completed|Transport error: network error|Upstream request failed|websocket closed|socket connection was closed unexpectedly|tls handshake eof|Connection reset by (?:peer|server)|TLS close_notify|Broken pipe|remote host|远程主机强迫关闭|No route to host|Connection refused|error sending request|Provider returned error|high demand|upstream_error|http2: response body closed|AMR model catalog is unavailable|statusCode[\"']?\s*:\s*(?:400|404)|400 Bad Request|404 Not Found)\b/i
+  return /\b(stream disconnected before completion|response\.completed|Transport error: network error|Upstream request failed|websocket closed|socket connection was closed unexpectedly|tls handshake eof|Connection reset by (?:peer|server)|TLS close_notify|Broken pipe|remote host|远程主机强迫关闭|No route to host|Connection refused|error sending request|Provider returned error|high demand|upstream_error|http2: response body closed|statusCode[\"']?\s*:\s*(?:400|404)|400 Bad Request|404 Not Found)\b/i
     .test(text);
 }
 
@@ -210,7 +209,7 @@ function authDetail(text: string): TrackingRunFailureDetail {
 }
 
 function upstreamDetail(text: string): TrackingRunFailureDetail {
-  if (/\b(AMR model catalog is unavailable|no endpoints found that support tool use|provider routing)\b/i.test(text)) {
+  if (/\b(no endpoints found that support tool use|provider routing)\b/i.test(text)) {
     return 'provider_routing_error';
   }
   if (/\bhigh demand|temporary errors\b/i.test(text)) return 'provider_high_demand';
@@ -366,26 +365,10 @@ export function classifyRunFailure(
   const errorCode = normalizeCode(input.errorCode ?? input.status.errorCode);
   const text = collectFailureText(input);
   const retryableHint = latestRetryable(input.events);
-  const amrFailure = classifyAmrAccountFailure(text);
 
   if (
-    errorCode === 'AMR_INSUFFICIENT_BALANCE' ||
-    amrFailure?.code === 'AMR_INSUFFICIENT_BALANCE'
-  ) {
-    return classification(
-      'insufficient_balance',
-      'amr_insufficient_balance',
-      'session_init',
-      false,
-      'recharge',
-    );
-  }
-
-  if (
-    errorCode === 'AMR_AUTH_REQUIRED' ||
     errorCode === 'AGENT_AUTH_REQUIRED' ||
-    errorCode === 'UNAUTHORIZED' ||
-    amrFailure?.code === 'AMR_AUTH_REQUIRED'
+    errorCode === 'UNAUTHORIZED'
   ) {
     return classification(
       'auth',
@@ -406,9 +389,7 @@ export function classifyRunFailure(
     );
   }
 
-  const modelDetail = errorCode === 'AMR_MODEL_UNAVAILABLE'
-    ? 'model_not_found'
-    : modelUnavailableDetail(text);
+  const modelDetail = modelUnavailableDetail(text);
   if (modelDetail) {
     return classification(
       'model_unavailable',
